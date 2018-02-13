@@ -6,5 +6,10 @@ repository = "https://github.com/jFransham/smallstring"
 description = "'Small string' optimization: store small strings on the stack using smallvec"
 license = "MIT"
 
-[dependencies]
-smallvec = "0.6"
+[features]
+std = ["smallvec/std"]
+default = ["std"]
+
+[dependencies.smallvec]
+version = "0.6"
+default-features = false

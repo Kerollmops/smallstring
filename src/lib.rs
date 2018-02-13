@@ -1,10 +1,39 @@
+//! Small strings, parallel to small vectors.
+//!
+//! Small strings store a certain number of bytes inline and fall back to heap
+//! allocations for larger sizes.
+//!
+//! ## no_std support
+//!
+//! By default, `smallstring` depends on `libstd`. It can be configured to use
+//! the `core` and `alloc` libraries instead.
+//!
+//! Depend on `smallstring` with `default-features = false` in `Cargo.toml` to
+//! disable its dependency on `std`:
+//!
+//! ```toml
+//! smallstring = { version = "0.2", default-features = false }
+//! ```
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
 extern crate smallvec;
 
-use std::str;
-use std::ffi::OsStr;
+#[cfg(not(feature = "std"))]
+mod std {
+    extern crate alloc;
+    extern crate core;
+
+    pub use self::alloc::{borrow, str, string, vec};
+    pub use self::core::{cmp, fmt, hash, iter, mem, ops};
+}
+
+use std::{cmp, fmt, hash, mem, str};
 use std::ops::{Deref, DerefMut};
 use std::borrow::Borrow;
 use std::iter::{FromIterator, IntoIterator};
+use std::string::String;
+
 use smallvec::{Array, SmallVec};
 
 #[derive(Clone, Default)]
@@ -145,21 +174,21 @@ impl<'a, B: Array<Item = u8>> SmallString<B> {
     }
 }
 
-impl<B: Array<Item = u8>> std::hash::Hash for SmallString<B> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl<B: Array<Item = u8>> hash::Hash for SmallString<B> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         let s: &str = self;
         s.hash(state)
     }
 }
 
-impl<B: Array<Item = u8>> std::cmp::PartialEq for SmallString<B> {
+impl<B: Array<Item = u8>> cmp::PartialEq for SmallString<B> {
     fn eq(&self, other: &Self) -> bool {
         let (s1, s2): (&str, &str) = (self, other);
         s1 == s2
     }
 }
 
-impl<B: Array<Item = u8>> std::cmp::Eq for SmallString<B> {}
+impl<B: Array<Item = u8>> cmp::Eq for SmallString<B> {}
 
 impl<'a, B: Array<Item = u8>> PartialEq<SmallString<B>> for &'a str {
     fn eq(&self, other: &SmallString<B>) -> bool {
@@ -167,15 +196,15 @@ impl<'a, B: Array<Item = u8>> PartialEq<SmallString<B>> for &'a str {
     }
 }
 
-impl<B: Array<Item = u8>> std::fmt::Display for SmallString<B> {
-    fn fmt(&self, fm: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+impl<B: Array<Item = u8>> fmt::Display for SmallString<B> {
+    fn fmt(&self, fm: &mut fmt::Formatter) -> fmt::Result {
         let s: &str = SmallString::deref(self);
         s.fmt(fm)
     }
 }
 
-impl<B: Array<Item = u8>> std::fmt::Debug for SmallString<B> {
-    fn fmt(&self, fm: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<B: Array<Item = u8>> fmt::Debug for SmallString<B> {
+    fn fmt(&self, fm: &mut fmt::Formatter) -> fmt::Result {
         let s: &str = SmallString::deref(self);
         s.fmt(fm)
     }
@@ -201,7 +230,7 @@ impl<B: Array<Item = u8>> DerefMut for SmallString<B> {
             // Instead, let's do what String::deref_mut() did before
             // this method existed:
             // https://doc.rust-lang.org/1.3.0/src/collections/string.rs.html#1023-1027
-            std::mem::transmute::<&mut [u8], &mut str>(&mut self.buffer[..])
+            mem::transmute::<&mut [u8], &mut str>(&mut self.buffer[..])
         }
     }
 }
@@ -253,13 +282,6 @@ impl<'a, B: Array<Item = u8>> FromIterator<&'a str> for SmallString<B> {
     }
 }
 
-impl<B: Array<Item = u8>> AsRef<OsStr> for SmallString<B> {
-    fn as_ref(&self) -> &OsStr {
-        let s: &str = self.as_ref();
-        s.as_ref()
-    }
-}
-
 impl<B: Array<Item = u8>> Borrow<str> for SmallString<B> {
     fn borrow(&self) -> &str {
         &self
@@ -285,5 +307,13 @@ impl<B: Array<Item = u8>> From<String> for SmallString<B> {
 impl<B: Array<Item = u8>> From<SmallString<B>> for String {
     fn from(s: SmallString<B>) -> String {
         unsafe { String::from_utf8_unchecked(s.buffer.into_vec()) }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<B: Array<Item = u8>> AsRef<std::ffi::OsStr> for SmallString<B> {
+    fn as_ref(&self) -> &std::ffi::OsStr {
+        let s: &str = self.as_ref();
+        s.as_ref()
     }
 }
