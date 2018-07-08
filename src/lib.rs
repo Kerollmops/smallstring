@@ -25,7 +25,7 @@ mod std {
     extern crate core;
 
     pub use self::alloc::{borrow, str, string, vec};
-    pub use self::core::{cmp, fmt, hash, iter, mem, ops};
+    pub use self::core::{cmp, fmt, hash, iter, mem, ops, marker};
 }
 
 use std::{cmp, fmt, hash, mem, str};
@@ -33,6 +33,7 @@ use std::ops::{Deref, DerefMut};
 use std::borrow::Borrow;
 use std::iter::{FromIterator, IntoIterator};
 use std::string::String;
+use std::marker::PhantomData;
 
 use smallvec::{Array, SmallVec};
 
@@ -315,5 +316,56 @@ impl<B: Array<Item = u8>> AsRef<std::ffi::OsStr> for SmallString<B> {
     fn as_ref(&self) -> &std::ffi::OsStr {
         let s: &str = self.as_ref();
         s.as_ref()
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct SmallStr<B> {
+    _phantom: PhantomData<B>,
+    inner: str,
+}
+
+impl<B> SmallStr<B> {
+    pub fn from_str(s: &str) -> &Self {
+        unsafe { mem::transmute(s) }
+    }
+
+    pub fn to_str(&self) -> &str {
+        unsafe { mem::transmute(self) }
+    }
+}
+
+impl<B: Array<Item = u8>> Borrow<SmallStr<B>> for SmallString<B> {
+    fn borrow(&self) -> &SmallStr<B> {
+        SmallStr::from_str(self.borrow())
+    }
+}
+
+impl<B: Array<Item = u8>> ToOwned for SmallStr<B> {
+    type Owned = SmallString<B>;
+
+    fn to_owned(&self) -> Self::Owned {
+        self.inner.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::borrow::Cow;
+    use super::*;
+
+    type Array16 = [u8; 16];
+    type SmallStr16 = SmallStr<Array16>;
+    type SmallString16 = SmallString<Array16>;
+
+    #[test]
+    fn cow_is_implemented() {
+        let small_string: SmallString16 = "salut".into();
+        let _owned: Cow<SmallStr16> = Cow::Owned(small_string);
+
+        let str_wrapper = SmallStr::from_str("coucou");
+        let _borrowed: Cow<SmallStr16> = Cow::Borrowed(str_wrapper);
     }
 }
